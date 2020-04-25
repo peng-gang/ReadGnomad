@@ -27,6 +27,8 @@ std::vector<std::string>  split2(const std::string & src, const std::string & to
 
 std::map<std::string, std::vector<std::string> > parseCMLine(int argc, char* argv[]);
 
+std::map<std::string, std::vector<std::string> > parseCMLine(int argc, char* argv[], const std::vector<std::string> & allOptions, const std::vector<std::string> & mustOptions);
+
 template<class Type>
 int binSearch(const std::vector<Type> & src, Type value)
 {

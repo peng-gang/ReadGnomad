@@ -121,3 +121,79 @@ std::map<std::string, std::vector<std::string> > parseCMLine(int argc, char* arg
     return rlt;
 }
 
+
+std::map<std::string, std::vector<std::string> > parseCMLine(int argc, char* argv[], const std::vector<std::string> & allOptions, const std::vector<std::string> & mustOptions){
+    map<string, vector<string> > rlt;
+    vector<bool> tag;
+    if(mustOptions.size() > 0){
+        tag = vector<bool> (mustOptions.size(), false);
+    }
+    
+    
+    for(int i=1; i<argc; i++){
+        string para = argv[i];
+        if(para[0] == '-'){
+            
+            if(find(allOptions.begin(), allOptions.end(), para) != allOptions.end()){
+                vector<string> tmp;
+                rlt[para] = tmp;
+                
+                if(mustOptions.size() > 0){
+                    for(size_t i=0; i<mustOptions.size(); i++){
+                        if(mustOptions[i] == para){
+                            tag[i] = true;
+                        }
+                    }
+                }
+                
+                while(true){
+                    i++;
+                    if(i >= argc){
+                        break;
+                    }
+                    if(argv[i][0] == '-'){
+                        i--;
+                        break;
+                    }
+                    rlt[para].push_back(string(argv[i]));
+                }
+            } else {
+                cout << "Option " << para << " is not included in this program. This option and the following parameters after this option are discarded: ";
+                while(true){
+                    i++;
+                    if(i >= argc){
+                        break;
+                    }
+                    if(argv[i][0] == '-'){
+                        i--;
+                        break;
+                    }
+                    cout << argv[i] << ", ";
+                }
+                cout << endl;
+            }
+            
+            if(i >= argc){
+                break;
+            }
+        } else {
+            cout << para << " is a parameter withou option and is discarded" << endl;
+        }
+    }
+    
+    bool mustOptionsNotSet = false;
+    if(mustOptions.size() > 0){
+        for(size_t i=0; i<tag.size(); i++){
+            if(!tag[i]){
+                cout << mustOptions[i] << " must be set in this program. " << endl;
+                mustOptionsNotSet = true;
+            }
+        }
+    }
+    
+    if(mustOptionsNotSet){
+        rlt.clear();
+    }
+    
+    return rlt;
+}
