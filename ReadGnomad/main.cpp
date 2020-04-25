@@ -28,7 +28,9 @@ int main(int argc, char **argv){
  * -info AF AC ...  // id in information section, please check VCF header file for details
  * -vep SYMBOL Gene ... // id in VEP section, please check VCF header for details
  */
-    map<string, vector<string> > cmLine = parseCMLine(argc, argv);
+    vector<string> mustOptions = {"-i", "-o"};
+    vector<string> allOptions = {"-i", "-o", "-info", "-vep"};
+    map<string, vector<string> > cmLine = parseCMLine(argc, argv, allOptions, mustOptions);
     for(map<string, vector<string> >::iterator it = cmLine.begin(); it != cmLine.end(); it++){
         cout << it->first << endl;
         for(vector<string>::iterator it2 = it->second.begin(); it2 != it->second.end(); it2++){

@@ -158,7 +158,8 @@ std::map<std::string, std::vector<std::string> > parseCMLine(int argc, char* arg
                     rlt[para].push_back(string(argv[i]));
                 }
             } else {
-                cout << "Option " << para << " is not included in this program. This option and the following parameters after this option are discarded: ";
+                cout << "Option " << para << " is not included in this program. This option and the following parameters after this option are discarded: " << endl;
+                bool idxFirst = true;
                 while(true){
                     i++;
                     if(i >= argc){
@@ -168,7 +169,13 @@ std::map<std::string, std::vector<std::string> > parseCMLine(int argc, char* arg
                         i--;
                         break;
                     }
-                    cout << argv[i] << ", ";
+                    if(idxFirst){
+                        cout << argv[i];
+                        idxFirst = false;
+                    } else {
+                        cout << ", " << argv[i];
+                    }
+                    
                 }
                 cout << endl;
             }
