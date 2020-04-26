@@ -123,7 +123,8 @@ int main(int argc, char **argv){
             }
             cout << hrec->keys[i] << " = " << hrec->vals [i] << endl;
         }
-        bcf_hrec_destroy(hrec);
+        //hrec is a pointer to somewhere in hdr, no need to free now
+        //bcf_hrec_destroy(hrec);
     }
     
     
@@ -139,10 +140,10 @@ int main(int argc, char **argv){
     //output header
     fout << "Chr\tPos\tID\tref\talt";
     for(size_t i=0; i<cmLine["-info"].size(); i++){
-        cout << "\t" << cmLine["-info"][i];
+        fout << "\t" << cmLine["-info"][i];
     }
     for(size_t i=0; i<cmLine["-vep"].size(); i++){
-        cout << "\t" << cmLine["-vep"][i];
+        fout << "\t" << cmLine["-vep"][i];
     }
     fout << endl;
     
@@ -181,6 +182,11 @@ int main(int argc, char **argv){
         for(size_t i=0; i<idxInfo.size(); i++){
             // a pointer to some place in rec, no need to free
             info = bcf_get_info_id(rec, idxInfo[i]);
+            
+            if(!info){
+                fout << "\t" << "NA";
+                continue;
+            }
             
             switch (info->type) {
                 case BCF_BT_INT8:
@@ -254,8 +260,6 @@ int main(int argc, char **argv){
     
     if (r < -1) error("bcf_read1");
     
-    
-    
     bcf_destroy1(rec);
     bcf_hdr_destroy(hdr);
     int ret;
@@ -264,6 +268,8 @@ int main(int argc, char **argv){
         fprintf(stderr,"hts_close(%s): non-zero status %d\n",fname.c_str(),ret);
         exit(ret);
     }
+    
+    cout << "Finished processing!" << endl;
     
     return 0;
 }
