@@ -38,9 +38,10 @@ int main(int argc, char **argv){
  * -filterLarger AF 0.2 ... // filter out all variants with AF > 0.2
  * -filterSmaller AF 0.01 ...   // filter out all variants with AF < 0.01
  * -filterNotEqual variant_type snv ...  // include snv only
+ * -range chr1:1000-20000  // only consider the variants in chromosome 1 from 1000 to 20000
  */
     vector<string> mustOptions = {"-i", "-o"};
-    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual"};
+    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-range"};
     
     
     // process filter parameter
@@ -67,17 +68,20 @@ int main(int argc, char **argv){
     
     // check header information
     vector<int> idxInfo;
-    for(size_t i = 0; i<cmLine["-info"].size(); i++){
-        int idxTmp = bcf_hdr_id2int(hdr, BCF_DT_ID, cmLine["-info"][i].c_str());
-        if(idxTmp < 0){
-            cout << "ID " << cmLine["-info"][i] << " is not included in the file. Please recheck header file." << endl;
-            bcf_hdr_destroy(hdr);
-            hts_close(fp);
-            return -1;
+    if(cmLine.find("-info") != cmLine.end()){
+        for(size_t i = 0; i<cmLine["-info"].size(); i++){
+            int idxTmp = bcf_hdr_id2int(hdr, BCF_DT_ID, cmLine["-info"][i].c_str());
+            if(idxTmp < 0){
+                cout << "ID " << cmLine["-info"][i] << " is not included in the file. Please recheck header file." << endl;
+                bcf_hdr_destroy(hdr);
+                hts_close(fp);
+                return -1;
+            }
+            
+            idxInfo.push_back(idxTmp);
         }
-        
-        idxInfo.push_back(idxTmp);
     }
+    
     
     
     // get filter idx in header
@@ -87,48 +91,50 @@ int main(int argc, char **argv){
     
     vector<size_t> idxVepTag;
     int idxVep = -1;
-    if(cmLine["-vep"].size() > 0){
-        idxVep = bcf_hdr_id2int(hdr, BCF_DT_ID, "vep");
-        if(idxVep < 0){
-            cout << "vep is not included in the file. Please recheck header file." << endl;
-            bcf_hdr_destroy(hdr);
-            hts_close(fp);
-            return -1;
-        }
-        
-        bcf_hrec_t *hrec = bcf_hdr_get_hrec(hdr, BCF_HL_INFO, "ID", "vep", NULL);
-        for(int i=0; i<hrec->nkeys; i++){
-            if(string(hrec->keys[i]) == "Description"){
-                string vepDesp(hrec->vals[i]);
-                size_t idxFormat = vepDesp.find("Format:");
-                if(idxFormat == string::npos){
-                    cout << "Cannot file the format of vep section in header file." << endl;
-                    bcf_hdr_destroy(hdr);
-                    hts_close(fp);
-                    return -1;
-                }
-                vector<string> vsVep = split(vepDesp.substr(idxFormat + 8), "|");
-                for(size_t j=0; j<cmLine["-vep"].size(); j++){
-                    vector<string>::iterator it = find(vsVep.begin(), vsVep.end(), cmLine["-vep"][j]);
-                    if(it == vsVep.end()){
-                        cout << cmLine["-vep"][j] << " is not included in the file. Please recheck header file." << endl;
+    if(cmLine.find("-vep") != cmLine.end()){
+        if(cmLine["-vep"].size() > 0){
+            idxVep = bcf_hdr_id2int(hdr, BCF_DT_ID, "vep");
+            if(idxVep < 0){
+                cout << "vep is not included in the file. Please recheck header file." << endl;
+                bcf_hdr_destroy(hdr);
+                hts_close(fp);
+                return -1;
+            }
+            
+            bcf_hrec_t *hrec = bcf_hdr_get_hrec(hdr, BCF_HL_INFO, "ID", "vep", NULL);
+            for(int i=0; i<hrec->nkeys; i++){
+                if(string(hrec->keys[i]) == "Description"){
+                    string vepDesp(hrec->vals[i]);
+                    size_t idxFormat = vepDesp.find("Format:");
+                    if(idxFormat == string::npos){
+                        cout << "Cannot file the format of vep section in header file." << endl;
                         bcf_hdr_destroy(hdr);
                         hts_close(fp);
                         return -1;
-                    } else {
-                        idxVepTag.push_back(std::distance(vsVep.begin(), it));
                     }
+                    vector<string> vsVep = split(vepDesp.substr(idxFormat + 8), "|");
+                    for(size_t j=0; j<cmLine["-vep"].size(); j++){
+                        vector<string>::iterator it = find(vsVep.begin(), vsVep.end(), cmLine["-vep"][j]);
+                        if(it == vsVep.end()){
+                            cout << cmLine["-vep"][j] << " is not included in the file. Please recheck header file." << endl;
+                            bcf_hdr_destroy(hdr);
+                            hts_close(fp);
+                            return -1;
+                        } else {
+                            idxVepTag.push_back(std::distance(vsVep.begin(), it));
+                        }
+                    }
+                    break;
                 }
-                break;
+                //cout << hrec->keys[i] << " = " << hrec->vals [i] << endl;
             }
-            cout << hrec->keys[i] << " = " << hrec->vals [i] << endl;
+            //hrec is a pointer to somewhere in hdr, no need to free now
+            //bcf_hrec_destroy(hrec);
         }
-        //hrec is a pointer to somewhere in hdr, no need to free now
-        //bcf_hrec_destroy(hrec);
     }
     
     
-    bcf1_t *rec    = bcf_init1();
+    bcf1_t *rec = bcf_init1();
     if (!rec) error("bcf_init1 : %s", strerror(errno));
     
     ofstream fout(cmLine["-o"][0].c_str());
