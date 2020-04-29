@@ -9,6 +9,7 @@
 #include <htslib/kseq.h>
 
 #include "normal.h"
+#include "filter.hpp"
 
 using namespace std;
 
@@ -38,14 +39,16 @@ int main(int argc, char **argv){
  * -filterLarger AF 0.2 ... // filter out all variants with AF > 0.2
  * -filterSmaller AF 0.01 ...   // filter out all variants with AF < 0.01
  * -filterNotEqual variant_type snv ...  // include snv only
+ * -filterVEPNotEqual SYMBOL ACE&ACE2 ...  // include gene ACE and ACE2 only
  * -range chr1:1000-20000  // only consider the variants in chromosome 1 from 1000 to 20000
  */
     vector<string> mustOptions = {"-i", "-o"};
-    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-range"};
+    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual", "-range"};
     
     
     // process filter parameter
     bool filter = false;
+    bool filterVEP = false;
     
     
     map<string, vector<string> > cmLine = parseCMLine(argc, argv, allOptions, mustOptions);
@@ -58,6 +61,29 @@ int main(int argc, char **argv){
     }
     
     
+    // check filter
+    std::map<std::string, double> filterLarger;
+    std::map<std::string, double> filterSmaller;
+    std::map<std::string, std::vector<std::string> > filterNotEqual;
+    
+    int rt = checkFilter(cmLine, filterLarger, filterSmaller, filterNotEqual);
+    if(rt > 0){
+        filter = true;
+    } else if(rt < 0){
+        cout << "Error during parsing input filter parameters" << endl;
+        return -1;
+    }
+    
+    // check VEP filter
+    std::map<std::string, std::vector<std::string> > filterVEPNotEqual;
+    rt = checkVEPFilter(cmLine, filterVEPNotEqual);
+    if(rt > 0){
+        filterVEP = true;
+    } else if(rt < 0){
+        cout << "Error during parsing input VEP filter parameters" << endl;
+        return -1;
+    }
+    
     
     string fname = cmLine["-i"][0];
     htsFile *fp    = hts_open(fname.c_str(),"rb");
@@ -69,10 +95,10 @@ int main(int argc, char **argv){
     // check header information
     vector<int> idxInfo;
     if(cmLine.find("-info") != cmLine.end()){
-        for(size_t i = 0; i<cmLine["-info"].size(); i++){
+        for(size_t i=0; i<cmLine["-info"].size(); i++){
             int idxTmp = bcf_hdr_id2int(hdr, BCF_DT_ID, cmLine["-info"][i].c_str());
             if(idxTmp < 0){
-                cout << "ID " << cmLine["-info"][i] << " is not included in the file. Please recheck header file." << endl;
+                cout << "ID " << cmLine["-info"][i] << " is not included in the file. Please recheck header of vcf file." << endl;
                 bcf_hdr_destroy(hdr);
                 hts_close(fp);
                 return -1;
@@ -82,10 +108,49 @@ int main(int argc, char **argv){
         }
     }
     
-    
-    
     // get filter idx in header
+    vector<int> idxFilterLarger;
+    vector<int> idxFilterSmaller;
+    vector<int> idxFilterNotEqual;
     if(filter){
+        if(filterLarger.size() > 0){
+            for(std::map<std::string, double>::iterator it = filterLarger.begin(); it!=filterLarger.end(); it++){
+                int idxTmp = bcf_hdr_id2int(hdr, BCF_DT_ID, (it->first).c_str());
+                if(idxTmp < 0){
+                    cout << "Filter ID " << it->first << " is not included in the file. Please recheck header of vcf file.";
+                    bcf_hdr_destroy(hdr);
+                    hts_close(fp);
+                    return -1;
+                }
+                idxFilterLarger.push_back(idxTmp);
+            }
+        }
+        
+        if(filterSmaller.size() > 0){
+            for(std::map<std::string, double>::iterator it = filterSmaller.begin(); it!=filterSmaller.end(); it++){
+                int idxTmp = bcf_hdr_id2int(hdr, BCF_DT_ID, (it->first).c_str());
+                if(idxTmp < 0){
+                    cout << "Filter ID " << it->first << " is not included in the file. Please recheck header of vcf file.";
+                    bcf_hdr_destroy(hdr);
+                    hts_close(fp);
+                    return -1;
+                }
+                idxFilterSmaller.push_back(idxTmp);
+            }
+        }
+        
+        if(filterNotEqual.size() > 0){
+            for(std::map<std::string, std::vector<std::string> >::iterator it = filterNotEqual.begin(); it!=filterNotEqual.end(); it++){
+                int idxTmp = bcf_hdr_id2int(hdr, BCF_DT_ID, (it->first).c_str());
+                if(idxTmp < 0){
+                    cout << "Filter ID " << it->first << " is not included in the file. Please recheck header of vcf file.";
+                    bcf_hdr_destroy(hdr);
+                    hts_close(fp);
+                    return -1;
+                }
+                idxFilterNotEqual.push_back(idxTmp);
+            }
+        }
         cout << "filter" << endl;
     }
     
@@ -95,7 +160,7 @@ int main(int argc, char **argv){
         if(cmLine["-vep"].size() > 0){
             idxVep = bcf_hdr_id2int(hdr, BCF_DT_ID, "vep");
             if(idxVep < 0){
-                cout << "vep is not included in the file. Please recheck header file." << endl;
+                cout << "vep is not included in the file. Please recheck header of vcf file." << endl;
                 bcf_hdr_destroy(hdr);
                 hts_close(fp);
                 return -1;
@@ -107,7 +172,7 @@ int main(int argc, char **argv){
                     string vepDesp(hrec->vals[i]);
                     size_t idxFormat = vepDesp.find("Format:");
                     if(idxFormat == string::npos){
-                        cout << "Cannot file the format of vep section in header file." << endl;
+                        cout << "Cannot find the format of vep section in header of vcf file." << endl;
                         bcf_hdr_destroy(hdr);
                         hts_close(fp);
                         return -1;
@@ -116,7 +181,7 @@ int main(int argc, char **argv){
                     for(size_t j=0; j<cmLine["-vep"].size(); j++){
                         vector<string>::iterator it = find(vsVep.begin(), vsVep.end(), cmLine["-vep"][j]);
                         if(it == vsVep.end()){
-                            cout << cmLine["-vep"][j] << " is not included in the file. Please recheck header file." << endl;
+                            cout << cmLine["-vep"][j] << " is not included in the file. Please recheck header of vcf file." << endl;
                             bcf_hdr_destroy(hdr);
                             hts_close(fp);
                             return -1;
@@ -131,6 +196,48 @@ int main(int argc, char **argv){
             //hrec is a pointer to somewhere in hdr, no need to free now
             //bcf_hrec_destroy(hrec);
         }
+    }
+    
+    // vep filter index
+    vector<size_t> idxFilterVEPNotEqual;
+    if(filterVEP){
+        if(idxVep < 0){
+            cout << "vep information is not included in the file. Please recheck header of vcf file." << endl;
+            bcf_hdr_destroy(hdr);
+            hts_close(fp);
+            return -1;
+        }
+        
+        bcf_hrec_t *hrec = bcf_hdr_get_hrec(hdr, BCF_HL_INFO, "ID", "vep", NULL);
+        for(int i=0; i<hrec->nkeys; i++){
+            if(string(hrec->keys[i]) == "Description"){
+                string vepDesp(hrec->vals[i]);
+                size_t idxFormat = vepDesp.find("Format:");
+                if(idxFormat == string::npos){
+                    cout << "Cannot find the format of vep section in header of vcf file." << endl;
+                    bcf_hdr_destroy(hdr);
+                    hts_close(fp);
+                    return -1;
+                }
+                vector<string> vsVep = split(vepDesp.substr(idxFormat + 8), "|");
+                
+                if(filterVEPNotEqual.size() > 0){
+                    for(std::map<std::string, std::vector<std::string> >::iterator it = filterVEPNotEqual.begin(); it!=filterVEPNotEqual.end(); it++){
+                        vector<string>::iterator itTmp = find(vsVep.begin(), vsVep.end(), it->first);
+                        if(itTmp == vsVep.end()){
+                            cout << "Filter ID " << it->first << " is not included in the VEP part of the file. Please recheck header of vcf file.";
+                            bcf_hdr_destroy(hdr);
+                            hts_close(fp);
+                            return -1;
+                        }
+                        idxFilterVEPNotEqual.push_back(std::distance(vsVep.begin(), itTmp));
+                    }
+                }
+                break;
+            }
+            //cout << hrec->keys[i] << " = " << hrec->vals [i] << endl;
+        }
+        cout << "filterVEP" << endl;
     }
     
     
@@ -169,7 +276,12 @@ int main(int argc, char **argv){
         
         //filter
         if(filter){
-            cout << "filter" << endl;
+            cout << "start filter" << endl;
+        }
+        
+        //VEP filter
+        if(filterVEP){
+            cout << "start vep filter" << endl;
         }
         
         // basic variation information

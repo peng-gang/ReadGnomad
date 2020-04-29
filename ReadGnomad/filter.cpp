@@ -60,12 +60,37 @@ int checkFilter(std::map<std::string, std::vector<std::string> > cmLine,
     if(it != cmLine.end()){
         if(it->second.size() > 0) {
             if(it->second.size() % 2 != 0){
-                cout << "The parameter set in -filterSmaller is not paired. It should be -filterNotEqual id1 var1 id2 var2 ..." << endl;
+                cout << "The parameter set in -filterNotEqual is not paired. It should be -filterNotEqual id1 var1 id2 var2 ..." << endl;
                 return -1;
             }
             
             for(int i=0; i<it->second.size()/2; i++){
                 filterNotEqual[it->second[i*2]] = split(it->second[i*2+1], "&", true);
+            }
+            
+            rlt++;
+        }
+    }
+    
+    return rlt;
+}
+
+
+int checkVEPFilter(std::map<std::string, std::vector<std::string> > cmLine,
+                   std::map<std::string, std::vector<std::string> > & filterVEPNotEqual){
+    int rlt = 0;
+    
+    map<string, vector<string> >::iterator it;
+    it = cmLine.find("-filterVEPNotEqual");
+    if(it != cmLine.end()){
+        if(it->second.size() > 0) {
+            if(it->second.size() % 2 != 0){
+                cout << "The parameter set in -filterVEPNotEqual is not paired. It should be -filterVEPNotEqual id1 var1 id2 var2 ..." << endl;
+                return -1;
+            }
+            
+            for(int i=0; i<it->second.size()/2; i++){
+                filterVEPNotEqual[it->second[i*2]] = split(it->second[i*2+1], "&", true);
             }
             
             rlt++;

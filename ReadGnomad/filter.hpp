@@ -26,4 +26,7 @@ int checkFilter(std::map<std::string, std::vector<std::string> > cmLine,
                  std::map<std::string, std::vector<std::string> > & filterNotEqual);
 
 
+int checkVEPFilter(std::map<std::string, std::vector<std::string> > cmLine,
+                   std::map<std::string, std::vector<std::string> > & filterVEPNotEqual);
+
 #endif /* filter_hpp */
