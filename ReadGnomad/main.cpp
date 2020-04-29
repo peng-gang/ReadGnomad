@@ -34,8 +34,8 @@ int main(int argc, char **argv){
 /*
  * -i input.vcf.bgz
  * -o output.txt (tab delimited)
- * -info AF AC ...  // id in information section, please check VCF header file for details
- * -vep SYMBOL Gene ... // id in VEP section, please check VCF header for details
+ * -info AF AC ...  // id in information section to include in output file, please check VCF header file for details
+ * -vep SYMBOL Gene ... // id in VEP section to include in output file, please check VCF header for details
  * -filterLarger AF 0.2 ... // filter out all variants with AF > 0.2
  * -filterSmaller AF 0.01 ...   // filter out all variants with AF < 0.01
  * -filterNotEqual variant_type snv ...  // include snv only
@@ -276,12 +276,184 @@ int main(int argc, char **argv){
         
         //filter
         if(filter){
-            cout << "start filter" << endl;
+            //cout << "start filter" << endl;
+            bool include = true;
+            int idxTmp = 0;
+            if(filterLarger.size() > 0){
+                for(map<string, double>::iterator it = filterLarger.begin(); it!=filterLarger.end(); it++){
+                    info = bcf_get_info_id(rec, idxFilterLarger[idxTmp]);
+                    idxTmp++;
+                    
+                    if(!info){
+                        continue;
+                    }
+                    
+                    double valTmp;
+                    switch (info->type) {
+                        case BCF_BT_INT8:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_INT16:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_INT32:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_INT64:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_FLOAT:
+                            valTmp = info->v1.f;
+                            break;
+                        case BCF_BT_CHAR:
+                        {
+                            cout << it->first << " is a string instead of a number. Please recheck vcf file." << endl;
+                            return  -1;
+                        }
+                        default:
+                            cout << "Unrecognized info type!" << endl;
+                            return  -1;
+                    }
+                    
+                    if(valTmp > it->second){
+                        include = false;
+                        break;
+                    }
+                }
+            }
+            
+            if(!include){
+                continue;
+            }
+            
+            
+            
+            
+            idxTmp = 0;
+            if(filterSmaller.size() > 0){
+                for(map<string, double>::iterator it = filterSmaller.begin(); it!=filterSmaller.end(); it++){
+                    info = bcf_get_info_id(rec, idxFilterSmaller[idxTmp]);
+                    idxTmp++;
+                    
+                    if(!info){
+                        continue;
+                    }
+                    
+                    double valTmp;
+                    switch (info->type) {
+                        case BCF_BT_INT8:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_INT16:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_INT32:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_INT64:
+                            valTmp = info->v1.i;
+                            break;
+                        case BCF_BT_FLOAT:
+                            valTmp = info->v1.f;
+                            break;
+                        case BCF_BT_CHAR:
+                        {
+                            cout << it->first << " is a string instead of a number. Please recheck vcf file." << endl;
+                            return  -1;
+                        }
+                        default:
+                            cout << "Unrecognized info type!" << endl;
+                            return  -1;
+                    }
+                    
+                    if(valTmp < it->second){
+                        include = false;
+                        break;
+                    }
+                }
+            }
+            
+            if(!include){
+                continue;
+            }
+            
+            
+            
+            idxTmp = 0;
+            if(filterNotEqual.size() > 0){
+                for(map<string, vector<string> > ::iterator it = filterNotEqual.begin(); it!=filterNotEqual.end(); it++){
+                    info = bcf_get_info_id(rec, idxFilterNotEqual[idxTmp]);
+                    idxTmp++;
+                    
+                    if(!info){
+                        continue;
+                    }
+                    
+                    string valTmp;
+                    switch (info->type) {
+                        case BCF_BT_INT8:
+                            valTmp = to_string(info->v1.i);
+                            break;
+                        case BCF_BT_INT16:
+                            valTmp = to_string(info->v1.i);
+                            break;
+                        case BCF_BT_INT32:
+                            valTmp = to_string(info->v1.i);
+                            break;
+                        case BCF_BT_INT64:
+                            valTmp = to_string(info->v1.i);
+                            break;
+                        case BCF_BT_FLOAT:
+                            valTmp = to_string(info->v1.f);
+                            break;
+                        case BCF_BT_CHAR:
+                        {
+                            valTmp = string((char*) info->vptr, info->len);
+                            break;
+                        }
+                        default:
+                            cout << "Unrecognized info type!" << endl;
+                            return  -1;
+                    }
+                    
+                    if(find(it->second.begin(), it->second.end(), valTmp) == it->second.end()){
+                        include = false;
+                        break;
+                    }
+                }
+            }
+            
+            if(!include){
+                continue;
+            }
         }
         
         //VEP filter
         if(filterVEP){
-            cout << "start vep filter" << endl;
+            //cout << "start vep filter" << endl;
+            
+            info = bcf_get_info_id(rec, idxVep);
+            
+            string infoTmp((char*) info->vptr, info->len);
+            vector<string> vsTmp = split(infoTmp, "|");
+            
+            bool include = true;
+            int idxTmp = 0;
+            if(filterVEPNotEqual.size() > 0){
+                for(map<string, vector<string> > ::iterator it = filterVEPNotEqual.begin(); it!=filterVEPNotEqual.end(); it++){
+                    
+                    string valTmp = vsTmp[idxFilterVEPNotEqual[idxTmp]];
+                    idxTmp++;
+                    
+                    if(find(it->second.begin(), it->second.end(), valTmp) == it->second.end()){
+                        include = false;
+                        break;
+                    }
+                }
+            }
+            if(!include){
+                continue;
+            }
         }
         
         // basic variation information
