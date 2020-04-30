@@ -53,6 +53,7 @@ int main(int argc, char **argv){
     
     
     map<string, vector<string> > cmLine = parseCMLine(argc, argv, allOptions, mustOptions);
+    /*
     for(map<string, vector<string> >::iterator it = cmLine.begin(); it != cmLine.end(); it++){
         cout << it->first << endl;
         for(vector<string>::iterator it2 = it->second.begin(); it2 != it->second.end(); it2++){
@@ -60,6 +61,7 @@ int main(int argc, char **argv){
         }
         cout << endl << endl;
     }
+     */
     
     
     // check filter
@@ -185,7 +187,7 @@ int main(int argc, char **argv){
                 idxFilterNotEqual.push_back(idxTmp);
             }
         }
-        cout << "filter" << endl;
+        //cout << "filter" << endl;
     }
     
     vector<size_t> idxVepTag;
@@ -271,7 +273,7 @@ int main(int argc, char **argv){
             }
             //cout << hrec->keys[i] << " = " << hrec->vals [i] << endl;
         }
-        cout << "filterVEP" << endl;
+        //cout << "filterVEP" << endl;
     }
     
     
@@ -295,6 +297,8 @@ int main(int argc, char **argv){
     fout << endl;
     
     int r;
+    int total=0;
+    cout << "Start parsing" << endl;
     if(rangeSet){
         //while ((r=bcf_itr_next(fp, iterFile, rec)) >= 0) {
         //while ((r=tbx_itr_next(fp, idxFile, iterFile, rec)) >= 0)
@@ -302,6 +306,10 @@ int main(int argc, char **argv){
         // we should make another tbx_itr_next function, check later
         kstring_t s = {0,0,0};
         while ((r=tbx_itr_next(fp, idxFile, iterFile, &s)) >= 0) {
+            total++;
+            if(total % 100000 == 0){
+                cout << total << endl;
+            }
             if(vcf_parse(&s, hdr, rec) < 0){
                 cout << "Error during parsing" << endl;
                 return -1;
@@ -570,6 +578,10 @@ int main(int argc, char **argv){
             int ct = 0;
             int rt = 0;
              */
+            total++;
+            if(total % 100000 == 0){
+                cout << total << endl;
+            }
             
             bcf_info_t *info;
             bcf_unpack(rec, BCF_UN_STR);
@@ -860,7 +872,7 @@ int main(int argc, char **argv){
         exit(ret);
     }
     
-    cout << "Finished processing!" << endl;
+    cout << "Finished processing for " << total << " variants" << endl;
     
     return 0;
 }
