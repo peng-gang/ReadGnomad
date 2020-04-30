@@ -7,6 +7,7 @@
 #include <htslib/vcf.h>
 #include <htslib/kstring.h>
 #include <htslib/kseq.h>
+#include <htslib/tbx.h>
 
 #include "normal.h"
 #include "filter.hpp"
@@ -43,7 +44,7 @@ int main(int argc, char **argv){
  * -range chr1:1000-20000  // only consider the variants in chromosome 1 from 1000 to 20000
  */
     vector<string> mustOptions = {"-i", "-o"};
-    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual", "-range"};
+    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual"}; //, "-range"}; not include range now, too slow for current function
     
     
     // process filter parameter
@@ -85,12 +86,45 @@ int main(int argc, char **argv){
     }
     
     
+    
     string fname = cmLine["-i"][0];
     htsFile *fp    = hts_open(fname.c_str(),"rb");
+    
+    //vcf format
+    //const htsFormat *pt =  hts_get_format(fp);
+    
     if (!fp) error("Failed to open \"%s\" : %s", fname.c_str(), strerror(errno));
     bcf_hdr_t *hdr = bcf_hdr_read(fp);
     if (!hdr) error("bcf_hdr_read : %s", strerror(errno));
     
+    // check range
+    //hts_idx_t *idxFile; // index for vcf.gz file
+    //hts_itr_t *iterFile;  // iterator get from index file
+    tbx_t *idxFile;
+    hts_itr_t *iterFile;
+    bool rangeSet = false;
+    if(cmLine.find("-range") !=cmLine.end()){
+        //idxFile = bcf_index_load2(fname.c_str(), (fname+".tbi").c_str());
+        //idxFile = hts_idx_load(fname.c_str(), HTS_FMT_TBI);
+        idxFile = tbx_index_load(fname.c_str());
+        //cout << hts_idx_fmt(idxFile) << endl;
+        if(!idxFile){
+            cout << "Cannot find index file. Please make index file for " << fname << endl;
+            bcf_hdr_destroy(hdr);
+            hts_close(fp);
+            return  -1;
+        }
+        //iterFile = bcf_itr_querys(idxFile, hdr, cmLine["-range"][0].c_str());
+        //iterFile = bcf_itr_querys(idxFile->idx, hdr, cmLine["-range"][0].c_str());
+        iterFile = tbx_itr_querys(idxFile, cmLine["-range"][0].c_str());
+        if(!iterFile){
+            cout << "There are no variants in the range of " << cmLine["-range"][0] << endl;
+            bcf_hdr_destroy(hdr);
+            hts_close(fp);
+            return -1;
+        }
+        rangeSet = true;
+    }
     
     // check header information
     vector<int> idxInfo;
@@ -260,297 +294,312 @@ int main(int argc, char **argv){
     }
     fout << endl;
     
-    
-    
     int r;
-    while((r = bcf_read1(fp, hdr, rec)) >=0){
-        /*
-        float *values = 0;
-        char *dst = NULL;
-        int ct = 0;
-        int rt = 0;
-         */
-        
-        bcf_info_t *info;
-        bcf_unpack(rec, BCF_UN_STR);
-        
-        //filter
-        if(filter){
-            //cout << "start filter" << endl;
-            bool include = true;
-            int idxTmp = 0;
-            if(filterLarger.size() > 0){
-                for(map<string, double>::iterator it = filterLarger.begin(); it!=filterLarger.end(); it++){
-                    info = bcf_get_info_id(rec, idxFilterLarger[idxTmp]);
-                    idxTmp++;
-                    
-                    if(!info){
-                        continue;
-                    }
-                    
-                    double valTmp;
-                    switch (info->type) {
-                        case BCF_BT_INT8:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_INT16:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_INT32:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_INT64:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_FLOAT:
-                            valTmp = info->v1.f;
-                            break;
-                        case BCF_BT_CHAR:
-                        {
-                            cout << it->first << " is a string instead of a number. Please recheck vcf file." << endl;
-                            return  -1;
+    if(rangeSet){
+        //while ((r=bcf_itr_next(fp, iterFile, rec)) >= 0) {
+        //while ((r=tbx_itr_next(fp, idxFile, iterFile, rec)) >= 0)
+        //hts_itr_next((bgzfp), (itr), (r), (tbx))
+        // we should make another tbx_itr_next function, check later
+        kstring_t s = {0,0,0};
+        while ((r=tbx_itr_next(fp, idxFile, iterFile, &s)) >= 0) {
+            vector<string> vsLine = split(s.s, "\t");
+            vector<string> vsInfo = split(vsLine[7], ";");
+            for(size_t i=0; i<vsInfo.size(); i++){
+            }
+        }
+        //hts_idx_destroy(idxFile);
+        free(s.s);
+        tbx_destroy(idxFile);
+    } else {
+        while((r = bcf_read1(fp, hdr, rec)) >=0){
+            /*
+            float *values = 0;
+            char *dst = NULL;
+            int ct = 0;
+            int rt = 0;
+             */
+            
+            bcf_info_t *info;
+            bcf_unpack(rec, BCF_UN_STR);
+            
+            //filter
+            if(filter){
+                //cout << "start filter" << endl;
+                bool include = true;
+                int idxTmp = 0;
+                if(filterLarger.size() > 0){
+                    for(map<string, double>::iterator it = filterLarger.begin(); it!=filterLarger.end(); it++){
+                        info = bcf_get_info_id(rec, idxFilterLarger[idxTmp]);
+                        idxTmp++;
+                        
+                        if(!info){
+                            continue;
                         }
-                        default:
-                            cout << "Unrecognized info type!" << endl;
-                            return  -1;
-                    }
-                    
-                    if(valTmp > it->second){
-                        include = false;
-                        break;
-                    }
-                }
-            }
-            
-            if(!include){
-                continue;
-            }
-            
-            
-            
-            
-            idxTmp = 0;
-            if(filterSmaller.size() > 0){
-                for(map<string, double>::iterator it = filterSmaller.begin(); it!=filterSmaller.end(); it++){
-                    info = bcf_get_info_id(rec, idxFilterSmaller[idxTmp]);
-                    idxTmp++;
-                    
-                    if(!info){
-                        continue;
-                    }
-                    
-                    double valTmp;
-                    switch (info->type) {
-                        case BCF_BT_INT8:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_INT16:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_INT32:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_INT64:
-                            valTmp = info->v1.i;
-                            break;
-                        case BCF_BT_FLOAT:
-                            valTmp = info->v1.f;
-                            break;
-                        case BCF_BT_CHAR:
-                        {
-                            cout << it->first << " is a string instead of a number. Please recheck vcf file." << endl;
-                            return  -1;
+                        
+                        double valTmp;
+                        switch (info->type) {
+                            case BCF_BT_INT8:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_INT16:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_INT32:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_INT64:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_FLOAT:
+                                valTmp = info->v1.f;
+                                break;
+                            case BCF_BT_CHAR:
+                            {
+                                cout << it->first << " is a string instead of a number. Please recheck vcf file." << endl;
+                                return  -1;
+                            }
+                            default:
+                                cout << "Unrecognized info type!" << endl;
+                                return  -1;
                         }
-                        default:
-                            cout << "Unrecognized info type!" << endl;
-                            return  -1;
-                    }
-                    
-                    if(valTmp < it->second){
-                        include = false;
-                        break;
-                    }
-                }
-            }
-            
-            if(!include){
-                continue;
-            }
-            
-            
-            
-            idxTmp = 0;
-            if(filterNotEqual.size() > 0){
-                for(map<string, vector<string> > ::iterator it = filterNotEqual.begin(); it!=filterNotEqual.end(); it++){
-                    info = bcf_get_info_id(rec, idxFilterNotEqual[idxTmp]);
-                    idxTmp++;
-                    
-                    if(!info){
-                        continue;
-                    }
-                    
-                    string valTmp;
-                    switch (info->type) {
-                        case BCF_BT_INT8:
-                            valTmp = to_string(info->v1.i);
-                            break;
-                        case BCF_BT_INT16:
-                            valTmp = to_string(info->v1.i);
-                            break;
-                        case BCF_BT_INT32:
-                            valTmp = to_string(info->v1.i);
-                            break;
-                        case BCF_BT_INT64:
-                            valTmp = to_string(info->v1.i);
-                            break;
-                        case BCF_BT_FLOAT:
-                            valTmp = to_string(info->v1.f);
-                            break;
-                        case BCF_BT_CHAR:
-                        {
-                            valTmp = string((char*) info->vptr, info->len);
+                        
+                        if(valTmp > it->second){
+                            include = false;
                             break;
                         }
-                        default:
-                            cout << "Unrecognized info type!" << endl;
-                            return  -1;
                     }
-                    
-                    if(find(it->second.begin(), it->second.end(), valTmp) == it->second.end()){
-                        include = false;
+                }
+                
+                if(!include){
+                    continue;
+                }
+                
+                
+                
+                
+                idxTmp = 0;
+                if(filterSmaller.size() > 0){
+                    for(map<string, double>::iterator it = filterSmaller.begin(); it!=filterSmaller.end(); it++){
+                        info = bcf_get_info_id(rec, idxFilterSmaller[idxTmp]);
+                        idxTmp++;
+                        
+                        if(!info){
+                            continue;
+                        }
+                        
+                        double valTmp;
+                        switch (info->type) {
+                            case BCF_BT_INT8:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_INT16:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_INT32:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_INT64:
+                                valTmp = info->v1.i;
+                                break;
+                            case BCF_BT_FLOAT:
+                                valTmp = info->v1.f;
+                                break;
+                            case BCF_BT_CHAR:
+                            {
+                                cout << it->first << " is a string instead of a number. Please recheck vcf file." << endl;
+                                return  -1;
+                            }
+                            default:
+                                cout << "Unrecognized info type!" << endl;
+                                return  -1;
+                        }
+                        
+                        if(valTmp < it->second){
+                            include = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!include){
+                    continue;
+                }
+                
+                
+                
+                idxTmp = 0;
+                if(filterNotEqual.size() > 0){
+                    for(map<string, vector<string> > ::iterator it = filterNotEqual.begin(); it!=filterNotEqual.end(); it++){
+                        info = bcf_get_info_id(rec, idxFilterNotEqual[idxTmp]);
+                        idxTmp++;
+                        
+                        if(!info){
+                            continue;
+                        }
+                        
+                        string valTmp;
+                        switch (info->type) {
+                            case BCF_BT_INT8:
+                                valTmp = to_string(info->v1.i);
+                                break;
+                            case BCF_BT_INT16:
+                                valTmp = to_string(info->v1.i);
+                                break;
+                            case BCF_BT_INT32:
+                                valTmp = to_string(info->v1.i);
+                                break;
+                            case BCF_BT_INT64:
+                                valTmp = to_string(info->v1.i);
+                                break;
+                            case BCF_BT_FLOAT:
+                                valTmp = to_string(info->v1.f);
+                                break;
+                            case BCF_BT_CHAR:
+                            {
+                                valTmp = string((char*) info->vptr, info->len);
+                                break;
+                            }
+                            default:
+                                cout << "Unrecognized info type!" << endl;
+                                return  -1;
+                        }
+                        
+                        if(find(it->second.begin(), it->second.end(), valTmp) == it->second.end()){
+                            include = false;
+                            break;
+                        }
+                    }
+                }
+                
+                if(!include){
+                    continue;
+                }
+            }
+            
+            //VEP filter
+            if(filterVEP){
+                //cout << "start vep filter" << endl;
+                
+                info = bcf_get_info_id(rec, idxVep);
+                
+                string infoTmp((char*) info->vptr, info->len);
+                vector<string> vsTmp = split(infoTmp, "|");
+                
+                bool include = true;
+                int idxTmp = 0;
+                if(filterVEPNotEqual.size() > 0){
+                    for(map<string, vector<string> > ::iterator it = filterVEPNotEqual.begin(); it!=filterVEPNotEqual.end(); it++){
+                        
+                        string valTmp = vsTmp[idxFilterVEPNotEqual[idxTmp]];
+                        idxTmp++;
+                        
+                        if(find(it->second.begin(), it->second.end(), valTmp) == it->second.end()){
+                            include = false;
+                            break;
+                        }
+                    }
+                }
+                if(!include){
+                    continue;
+                }
+            }
+            
+            // basic variation information
+            string chr = bcf_hdr_id2name(hdr, rec->rid);
+            long long position =  rec->pos + 1;
+            string rsID = rec->d.id;
+            string ref = rec->d.allele[0];
+            string alt = ".";
+            if(rec->d.m_allele > 1){
+                alt = rec->d.allele[1];
+            }
+            
+            
+            fout << chr << "\t" << position << "\t" << rsID << "\t" << ref << "\t" << alt;
+            
+            for(size_t i=0; i<idxInfo.size(); i++){
+                // a pointer to some place in rec, no need to free
+                info = bcf_get_info_id(rec, idxInfo[i]);
+                
+                if(!info){
+                    fout << "\t" << "NA";
+                    continue;
+                }
+                
+                switch (info->type) {
+                    case BCF_BT_INT8:
+                        fout << "\t" << info->v1.i;
+                        break;
+                    case BCF_BT_INT16:
+                        fout << "\t" << info->v1.i;
+                        break;
+                    case BCF_BT_INT32:
+                        fout << "\t" << info->v1.i;
+                        break;
+                    case BCF_BT_INT64:
+                        fout << "\t" << info->v1.i;
+                        break;
+                    case BCF_BT_FLOAT:
+                        fout << "\t" << info->v1.f;
+                        break;
+                    case BCF_BT_CHAR:
+                    {
+                        string infoTmp((char*) info->vptr, info->len);
+                        fout << "\t" << infoTmp;
                         break;
                     }
+                    default:
+                        cout << "Unrecognized info type!" << endl;
+                        return  -1;
                 }
             }
-            
-            if(!include){
-                continue;
-            }
-        }
-        
-        //VEP filter
-        if(filterVEP){
-            //cout << "start vep filter" << endl;
-            
-            info = bcf_get_info_id(rec, idxVep);
-            
-            string infoTmp((char*) info->vptr, info->len);
-            vector<string> vsTmp = split(infoTmp, "|");
-            
-            bool include = true;
-            int idxTmp = 0;
-            if(filterVEPNotEqual.size() > 0){
-                for(map<string, vector<string> > ::iterator it = filterVEPNotEqual.begin(); it!=filterVEPNotEqual.end(); it++){
-                    
-                    string valTmp = vsTmp[idxFilterVEPNotEqual[idxTmp]];
-                    idxTmp++;
-                    
-                    if(find(it->second.begin(), it->second.end(), valTmp) == it->second.end()){
-                        include = false;
-                        break;
-                    }
-                }
-            }
-            if(!include){
-                continue;
-            }
-        }
-        
-        // basic variation information
-        string chr = bcf_hdr_id2name(hdr, rec->rid);
-        long long position =  rec->pos + 1;
-        string rsID = rec->d.id;
-        string ref = rec->d.allele[0];
-        string alt = ".";
-        if(rec->d.m_allele > 1){
-            alt = rec->d.allele[1];
-        }
-        
-        
-        fout << chr << "\t" << position << "\t" << rsID << "\t" << ref << "\t" << alt;
-        
-        for(size_t i=0; i<idxInfo.size(); i++){
-            // a pointer to some place in rec, no need to free
-            info = bcf_get_info_id(rec, idxInfo[i]);
-            
-            if(!info){
-                fout << "\t" << "NA";
-                continue;
-            }
-            
-            switch (info->type) {
-                case BCF_BT_INT8:
-                    fout << "\t" << info->v1.i;
-                    break;
-                case BCF_BT_INT16:
-                    fout << "\t" << info->v1.i;
-                    break;
-                case BCF_BT_INT32:
-                    fout << "\t" << info->v1.i;
-                    break;
-                case BCF_BT_INT64:
-                    fout << "\t" << info->v1.i;
-                    break;
-                case BCF_BT_FLOAT:
-                    fout << "\t" << info->v1.f;
-                    break;
-                case BCF_BT_CHAR:
-                {
-                    string infoTmp((char*) info->vptr, info->len);
-                    fout << "\t" << infoTmp;
-                    break;
-                }
-                default:
-                    cout << "Unrecognized info type!" << endl;
-                    return  -1;
-            }
-        }
 
-        if(idxVep >=0){
-            //BCF_BT_CHAR
-            info = bcf_get_info_id(rec, idxVep);
-            
-            string infoTmp((char*) info->vptr, info->len);
-            vector<string> vsTmp = split(infoTmp, "|");
-            for(size_t i=0; i<idxVepTag.size(); i++){
-                fout << "\t" << vsTmp[idxVepTag[i]];
+            if(idxVep >=0){
+                //BCF_BT_CHAR
+                info = bcf_get_info_id(rec, idxVep);
+                
+                string infoTmp((char*) info->vptr, info->len);
+                vector<string> vsTmp = split(infoTmp, "|");
+                for(size_t i=0; i<idxVepTag.size(); i++){
+                    fout << "\t" << vsTmp[idxVepTag[i]];
+                }
             }
-        }
-        fout << endl;
-        
-        
-        
-        /*
-         * another method to get infomation from vcf.bgz file
-        rt = bcf_get_info_float(hdr, rec, "controls_AF", &values, &ct);
-        if(rt >= 0){
-            cout << rt << endl;
-            cout << ct << endl;
-            cout << values[0] << endl;
-        }
-        
-        
-        rt = bcf_get_info_string(hdr, rec, "vep", &dst, &ct);
-        if ( rt >= 0 ) {
-            vector<string> vsVep = split(dst, "|");
-        } else {
+            fout << endl;
             
+            
+            
+            /*
+             * another method to get infomation from vcf.bgz file
+            rt = bcf_get_info_float(hdr, rec, "controls_AF", &values, &ct);
+            if(rt >= 0){
+                cout << rt << endl;
+                cout << ct << endl;
+                cout << values[0] << endl;
+            }
+            
+            
+            rt = bcf_get_info_string(hdr, rec, "vep", &dst, &ct);
+            if ( rt >= 0 ) {
+                vector<string> vsVep = split(dst, "|");
+            } else {
+                
+            }
+            
+            free(dst);
+            free(values);
+             */
+            
+            //kstring_t str = {0,0,0};
+            //vcf_format(hdr, rec, &str);
+            //bcf_unpack(rec, BCF_UN_ALL);
+            //string tmp = str.s;
+            //cout << tmp << endl;
         }
-        
-        free(dst);
-        free(values);
-         */
-        
-        //kstring_t str = {0,0,0};
-        //vcf_format(hdr, rec, &str);
-        //bcf_unpack(rec, BCF_UN_ALL);
-        //string tmp = str.s;
-        //cout << tmp << endl;
     }
     
     if (r < -1) error("bcf_read1");
-    
     bcf_destroy1(rec);
+    
     bcf_hdr_destroy(hdr);
     int ret;
     if ( (ret=hts_close(fp)) )
