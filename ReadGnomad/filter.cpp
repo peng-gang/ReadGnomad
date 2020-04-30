@@ -99,3 +99,50 @@ int checkVEPFilter(std::map<std::string, std::vector<std::string> > cmLine,
     
     return rlt;
 }
+
+
+
+/* check for range
+ tbx_itr_next(htsfp, tbx, itr, r)   hts_itr_next(hts_get_bgzfp(htsfp), (itr), (r), (tbx))
+
+ static inline int bcf_itr_next(htsFile *htsfp, hts_itr_t *itr, void *r) {
+         if (htsfp->is_bgzf)
+             return hts_itr_next(htsfp->fp.bgzf, itr, r, 0);
+
+         hts_log_error("Only bgzf compressed files can be used with iterators");
+         errno = EINVAL;
+         return -2;
+     }
+
+
+  #define tbx_itr_querys(tbx, s) hts_itr_querys((tbx)->idx, (s), (hts_name2id_f)(tbx_name2id), (tbx), hts_itr_query, tbx_readrec)
+
+ #define bcf_itr_querys(idx, hdr, s) hts_itr_querys((idx), (s), (hts_name2id_f)(bcf_hdr_name2id), (hdr), hts_itr_query, bcf_readrec)
+
+
+ int tbx_readrec(BGZF *fp, void *tbxv, void *sv, int *tid, hts_pos_t *beg, hts_pos_t *end);
+ int tbx_readrec(BGZF *fp, void *tbxv, void *sv, int *tid, hts_pos_t *beg, hts_pos_t *end)
+ {
+     tbx_t *tbx = (tbx_t *) tbxv;
+     kstring_t *s = (kstring_t *) sv;
+     int ret;
+     if ((ret = bgzf_getline(fp, '\n', s)) >= 0) {
+         tbx_intv_t intv;
+         if (get_intv(tbx, s, &intv, 0) < 0)
+             return -2;
+         *tid = intv.tid; *beg = intv.beg; *end = intv.end;
+     }
+     return ret;
+ }
+
+
+ int bcf_readrec(BGZF *fp, void *null, void *v, int *tid, hts_pos_t *beg, hts_pos_t *end);
+ int bcf_readrec(BGZF *fp, void *null, void *vv, int *tid, int *beg, int *end)
+ {
+     bcf1_t *v = (bcf1_t *) vv;
+     int ret;
+     if ((ret = bcf_read1_core(fp, v)) >= 0)
+         *tid = v->rid, *beg = v->pos, *end = v->pos + v->rlen;
+     return ret;
+ }
+ */
