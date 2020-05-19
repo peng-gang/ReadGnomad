@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
 #include <htslib/kstring.h>
@@ -42,9 +44,10 @@ int main(int argc, char **argv){
  * -filterNotEqual variant_type snv ...  // include snv only
  * -filterVEPNotEqual SYMBOL ACE&ACE2 ...  // include gene ACE and ACE2 only
  * -range chr1:1000-20000  // only consider the variants in chromosome 1 from 1000 to 20000
+ * -version 3.0 // gnomAD database version defulat is 3.0
  */
     vector<string> mustOptions = {"-i", "-o"};
-    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual", "-range"};
+    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual", "-range", "-version"};
     
     
     // process filter parameter
@@ -87,6 +90,13 @@ int main(int argc, char **argv){
         return -1;
     }
     
+    // vcf version
+    string vcfVersion;
+    if(cmLine.find("-version") != cmLine.end()){
+        vcfVersion = cmLine["-version"][0];
+    } else {
+        vcfVersion = "3.0";
+    }
     
     
     string fname = cmLine["-i"][0];
@@ -206,14 +216,25 @@ int main(int argc, char **argv){
             for(int i=0; i<hrec->nkeys; i++){
                 if(string(hrec->keys[i]) == "Description"){
                     string vepDesp(hrec->vals[i]);
-                    size_t idxFormat = vepDesp.find("Format:");
-                    if(idxFormat == string::npos){
-                        cout << "Cannot find the format of vep section in header of vcf file." << endl;
-                        bcf_hdr_destroy(hdr);
-                        hts_close(fp);
-                        return -1;
+                    vepDesp.pop_back();
+                    vepDesp.erase(0, 1);
+                    
+                    vector<string> vsVep;
+                    if(vcfVersion == "2.1"){
+                        size_t idxFormat = vepDesp.find("Format:");
+                        if(idxFormat == string::npos){
+                            cout << "Cannot find the format of vep section in header of vcf file." << endl;
+                            bcf_hdr_destroy(hdr);
+                            hts_close(fp);
+                            return -1;
+                        }
+                        vsVep = split(vepDesp.substr(idxFormat + 8), "|");
                     }
-                    vector<string> vsVep = split(vepDesp.substr(idxFormat + 8), "|");
+                    
+                    if(vcfVersion == "3.0"){
+                        vsVep = split(vepDesp, "|");
+                    }
+                    
                     for(size_t j=0; j<cmLine["-vep"].size(); j++){
                         vector<string>::iterator it = find(vsVep.begin(), vsVep.end(), cmLine["-vep"][j]);
                         if(it == vsVep.end()){
@@ -248,14 +269,24 @@ int main(int argc, char **argv){
         for(int i=0; i<hrec->nkeys; i++){
             if(string(hrec->keys[i]) == "Description"){
                 string vepDesp(hrec->vals[i]);
-                size_t idxFormat = vepDesp.find("Format:");
-                if(idxFormat == string::npos){
-                    cout << "Cannot find the format of vep section in header of vcf file." << endl;
-                    bcf_hdr_destroy(hdr);
-                    hts_close(fp);
-                    return -1;
+                vepDesp.pop_back();
+                vepDesp.erase(0, 1);
+                
+                vector<string> vsVep;
+                if(vcfVersion == "2.1"){
+                    size_t idxFormat = vepDesp.find("Format:");
+                    if(idxFormat == string::npos){
+                        cout << "Cannot find the format of vep section in header of vcf file." << endl;
+                        bcf_hdr_destroy(hdr);
+                        hts_close(fp);
+                        return -1;
+                    }
+                    vsVep = split(vepDesp.substr(idxFormat + 8), "|");
                 }
-                vector<string> vsVep = split(vepDesp.substr(idxFormat + 8), "|");
+                
+                if(vcfVersion == "3.0"){
+                    vsVep = split(vepDesp, "|");
+                }
                 
                 if(filterVEPNotEqual.size() > 0){
                     for(std::map<std::string, std::vector<std::string> >::iterator it = filterVEPNotEqual.begin(); it!=filterVEPNotEqual.end(); it++){
@@ -297,7 +328,7 @@ int main(int argc, char **argv){
     fout << endl;
     
     int r;
-    int total=0;
+    long long total=0;
     cout << "Start parsing" << endl;
     if(rangeSet){
         //while ((r=bcf_itr_next(fp, iterFile, rec)) >= 0) {
@@ -343,9 +374,9 @@ int main(int argc, char **argv){
                             case BCF_BT_INT32:
                                 valTmp = info->v1.i;
                                 break;
-                            case BCF_BT_INT64:
-                                valTmp = info->v1.i;
-                                break;
+                            //case BCF_BT_INT64:
+                            //    valTmp = info->v1.i;
+                            //    break;
                             case BCF_BT_FLOAT:
                                 valTmp = info->v1.f;
                                 break;
@@ -394,9 +425,9 @@ int main(int argc, char **argv){
                             case BCF_BT_INT32:
                                 valTmp = info->v1.i;
                                 break;
-                            case BCF_BT_INT64:
-                                valTmp = info->v1.i;
-                                break;
+                            //case BCF_BT_INT64:
+                            //    valTmp = info->v1.i;
+                            //    break;
                             case BCF_BT_FLOAT:
                                 valTmp = info->v1.f;
                                 break;
@@ -444,9 +475,9 @@ int main(int argc, char **argv){
                             case BCF_BT_INT32:
                                 valTmp = to_string(info->v1.i);
                                 break;
-                            case BCF_BT_INT64:
-                                valTmp = to_string(info->v1.i);
-                                break;
+                            //case BCF_BT_INT64:
+                            //    valTmp = to_string(info->v1.i);
+                            //    break;
                             case BCF_BT_FLOAT:
                                 valTmp = to_string(info->v1.f);
                                 break;
@@ -532,9 +563,9 @@ int main(int argc, char **argv){
                     case BCF_BT_INT32:
                         fout << "\t" << info->v1.i;
                         break;
-                    case BCF_BT_INT64:
-                        fout << "\t" << info->v1.i;
-                        break;
+                    //case BCF_BT_INT64:
+                    //    fout << "\t" << info->v1.i;
+                    //    break;
                     case BCF_BT_FLOAT:
                         fout << "\t" << info->v1.f;
                         break;
@@ -611,9 +642,9 @@ int main(int argc, char **argv){
                             case BCF_BT_INT32:
                                 valTmp = info->v1.i;
                                 break;
-                            case BCF_BT_INT64:
-                                valTmp = info->v1.i;
-                                break;
+                            //case BCF_BT_INT64:
+                            //    valTmp = info->v1.i;
+                            //    break;
                             case BCF_BT_FLOAT:
                                 valTmp = info->v1.f;
                                 break;
@@ -662,9 +693,9 @@ int main(int argc, char **argv){
                             case BCF_BT_INT32:
                                 valTmp = info->v1.i;
                                 break;
-                            case BCF_BT_INT64:
-                                valTmp = info->v1.i;
-                                break;
+                            //case BCF_BT_INT64:
+                            //    valTmp = info->v1.i;
+                            //    break;
                             case BCF_BT_FLOAT:
                                 valTmp = info->v1.f;
                                 break;
@@ -712,9 +743,9 @@ int main(int argc, char **argv){
                             case BCF_BT_INT32:
                                 valTmp = to_string(info->v1.i);
                                 break;
-                            case BCF_BT_INT64:
-                                valTmp = to_string(info->v1.i);
-                                break;
+                            //case BCF_BT_INT64:
+                            //    valTmp = to_string(info->v1.i);
+                            //    break;
                             case BCF_BT_FLOAT:
                                 valTmp = to_string(info->v1.f);
                                 break;
@@ -800,9 +831,9 @@ int main(int argc, char **argv){
                     case BCF_BT_INT32:
                         fout << "\t" << info->v1.i;
                         break;
-                    case BCF_BT_INT64:
-                        fout << "\t" << info->v1.i;
-                        break;
+                    //case BCF_BT_INT64:
+                    //    fout << "\t" << info->v1.i;
+                    //    break;
                     case BCF_BT_FLOAT:
                         fout << "\t" << info->v1.f;
                         break;

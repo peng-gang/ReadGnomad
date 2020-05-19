@@ -12,6 +12,7 @@
 #include <vector>
 #include <limits>
 #include <map>
+#include <algorithm> 
 
 //split string into several strings according to tok
 //src: the string to be split
