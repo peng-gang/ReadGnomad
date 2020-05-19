@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <algorithm>
 
 #include <htslib/hts.h>
 #include <htslib/vcf.h>
@@ -44,15 +45,17 @@ int main(int argc, char **argv){
  * -filterNotEqual variant_type snv ...  // include snv only
  * -filterVEPNotEqual SYMBOL ACE&ACE2 ...  // include gene ACE and ACE2 only
  * -range chr1:1000-20000  // only consider the variants in chromosome 1 from 1000 to 20000
- * -version 3.0 // gnomAD database version defulat is 3.0
+ * -version 3.0 // gnomAD database version. default is 3.0
+ * -rmNA Yes // Yes: remove the variants from record if the information is missing for filters. No: keep the variants if the information is NA for filters. default is Yes. info part only (not vep part)
  */
     vector<string> mustOptions = {"-i", "-o"};
-    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual", "-range", "-version"};
+    vector<string> allOptions = {"-i", "-o", "-info", "-vep", "-filterLarger", "-filterSmaller", "-filterNotEqual", "-filterVEPNotEqual", "-range", "-version", "-rmNA"};
     
     
     // process filter parameter
     bool filter = false;
     bool filterVEP = false;
+    bool rmNA = true;
     
     
     map<string, vector<string> > cmLine = parseCMLine(argc, argv, allOptions, mustOptions);
@@ -98,6 +101,13 @@ int main(int argc, char **argv){
         vcfVersion = "3.0";
     }
     
+    if(cmLine.find("-rmNA") != cmLine.end()){
+        string tmp = cmLine["-rmNA"][0];
+        std::transform(tmp.begin(), tmp.end(),tmp.begin(), ::toupper);
+        if(tmp == "NO"){
+            rmNA = false;
+        }
+    }
     
     string fname = cmLine["-i"][0];
     htsFile *fp    = hts_open(fname.c_str(),"rb");
@@ -360,6 +370,10 @@ int main(int argc, char **argv){
                         idxTmp++;
                         
                         if(!info){
+                            if(rmNA){
+                                include = false;
+                                break;
+                            }
                             continue;
                         }
                         
@@ -411,6 +425,10 @@ int main(int argc, char **argv){
                         idxTmp++;
                         
                         if(!info){
+                            if(rmNA){
+                                include = false;
+                                break;
+                            }
                             continue;
                         }
                         
@@ -461,6 +479,10 @@ int main(int argc, char **argv){
                         idxTmp++;
                         
                         if(!info){
+                            if(rmNA){
+                                include = false;
+                                break;
+                            }
                             continue;
                         }
                         
@@ -616,6 +638,14 @@ int main(int argc, char **argv){
             
             bcf_info_t *info;
             bcf_unpack(rec, BCF_UN_STR);
+            /*
+            long long positionT =  rec->pos + 1;
+            if(positionT == 5606888){
+                //info = bcf_get_info_id(rec, idxFilterSmaller[0]);
+                cout << rec->pos << endl;
+            }
+             */
+            
             
             //filter
             if(filter){
@@ -628,6 +658,10 @@ int main(int argc, char **argv){
                         idxTmp++;
                         
                         if(!info){
+                            if(rmNA){
+                                include = false;
+                                break;
+                            }
                             continue;
                         }
                         
@@ -657,7 +691,7 @@ int main(int argc, char **argv){
                                 cout << "Unrecognized info type!" << endl;
                                 return  -1;
                         }
-                        
+                                                
                         if(valTmp > it->second){
                             include = false;
                             break;
@@ -679,6 +713,10 @@ int main(int argc, char **argv){
                         idxTmp++;
                         
                         if(!info){
+                            if(rmNA){
+                                include = false;
+                                break;
+                            }
                             continue;
                         }
                         
@@ -729,6 +767,10 @@ int main(int argc, char **argv){
                         idxTmp++;
                         
                         if(!info){
+                            if(rmNA){
+                                include = false;
+                                break;
+                            }
                             continue;
                         }
                         
@@ -808,7 +850,6 @@ int main(int argc, char **argv){
             if(rec->d.m_allele > 1){
                 alt = rec->d.allele[1];
             }
-            
             
             fout << chr << "\t" << position << "\t" << rsID << "\t" << ref << "\t" << alt;
             
